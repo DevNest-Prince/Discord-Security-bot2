@@ -1,0 +1,90 @@
+
+
+
+const { ContainerBuilder, TextDisplayBuilder, SeparatorBuilder, SeparatorSpacingSize, MessageFlags } = require('discord.js');
+const config = require('../../config');
+const commandLockDb = require('../../../database/commandLock');
+
+module.exports = {
+    name: 'commandunlock',
+    description: 'Unlock a specific command for normal users',
+    aliases: ['cmdunlock', 'unlockcommand', 'unlockcmd'],
+    ownerOnly: true,
+
+    async execute(message, args) {
+        if (!config.isOwner(message.author.id)) return;
+
+        if (!args.length) {
+            const lockedCommands = await commandLockDb.getAllLocked();
+
+            const container = new ContainerBuilder()
+                .addTextDisplayComponents(
+                    new TextDisplayBuilder().setContent('**Command Unlock**')
+                );
+
+            if (lockedCommands.length === 0) {
+                container.addTextDisplayComponents(
+                    new TextDisplayBuilder().setContent(
+                        '> No commands are currently locked.\n' +
+                        `> Usage: \`${config.PREFIX} commandunlock <command>\``
+                    )
+                );
+            } else {
+                const list = lockedCommands.map((cmd, idx) =>
+                    `- **${cmd.command_name}** — locked <t:${Math.floor(cmd.locked_at / 1000)}:R>`
+                ).join('\n');
+                container.addTextDisplayComponents(
+                    new TextDisplayBuilder().setContent(`> Locked (${lockedCommands.length})\n${list}`)
+                );
+            }
+
+            container
+                .addSeparatorComponents(
+                    new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small).setDivider(true)
+                )
+                .addTextDisplayComponents(
+                    new TextDisplayBuilder().setContent('-# Admin restricted access | astryx')
+                );
+
+            return message.reply({ components: [container], flags: MessageFlags.IsComponentsV2 });
+        }
+
+        const commandName = args[0].toLowerCase();
+
+        if (!(await commandLockDb.isLocked(commandName))) {
+            const container = new ContainerBuilder()
+                .addTextDisplayComponents(
+                    new TextDisplayBuilder().setContent('**Command Unlock**')
+                )
+                .addTextDisplayComponents(
+                    new TextDisplayBuilder().setContent(`> **${commandName}** is not locked.`)
+                )
+                .addSeparatorComponents(
+                    new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small).setDivider(true)
+                )
+                .addTextDisplayComponents(
+                    new TextDisplayBuilder().setContent('-# Admin restricted access | astryx')
+                );
+
+            return message.reply({ components: [container], flags: MessageFlags.IsComponentsV2 });
+        }
+
+        await commandLockDb.unlock(commandName);
+
+        const container = new ContainerBuilder()
+            .addTextDisplayComponents(
+                new TextDisplayBuilder().setContent('**Command Unlock**')
+            )
+            .addTextDisplayComponents(
+                new TextDisplayBuilder().setContent(`> **${commandName}** has been unlocked.`)
+            )
+            .addSeparatorComponents(
+                new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small).setDivider(true)
+            )
+            .addTextDisplayComponents(
+                new TextDisplayBuilder().setContent('-# Admin restricted access | astryx')
+            );
+
+        return message.reply({ components: [container], flags: MessageFlags.IsComponentsV2 });
+    }
+};

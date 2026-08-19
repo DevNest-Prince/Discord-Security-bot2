@@ -1,0 +1,103 @@
+
+
+
+const {
+  ContainerBuilder,
+  TextDisplayBuilder,
+  SeparatorBuilder,
+  SeparatorSpacingSize,
+  MessageFlags,
+  PermissionFlagsBits,
+  AttachmentBuilder,
+  FileBuilder,
+} = require('discord.js');
+const DumpExporter = require('../../../utils/dumpExporter');
+
+module.exports = {
+  name: 'dumpusers',
+  description: 'Export all server members (humans + bots)',
+
+  async execute(interaction) {
+    if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
+      const container = new ContainerBuilder()
+        .addTextDisplayComponents(
+          new TextDisplayBuilder().setContent(`**Permission Denied**`)
+        )
+        .addSeparatorComponents(
+          new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small).setDivider(true)
+        )
+        .addTextDisplayComponents(
+          new TextDisplayBuilder().setContent('You need Administrator permission to use this command.')
+        );
+      return interaction.reply({
+        components: [container],
+        flags: MessageFlags.IsComponentsV2,
+        ephemeral: true
+      });
+    }
+
+    await interaction.deferReply({ ephemeral: true });
+
+    try {
+      await interaction.guild.members.fetch();
+      const content = DumpExporter.formatMembers(interaction.guild, false, false);
+      const { path: filePath, filename } = await DumpExporter.createDumpFile('users', content);
+
+      const attachment = new AttachmentBuilder(filePath, { name: filename });
+
+      const dmContainer = new ContainerBuilder()
+        .addTextDisplayComponents(
+          new TextDisplayBuilder().setContent(`**All Members Export**`)
+        )
+        .addSeparatorComponents(
+          new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small).setDivider(true)
+        )
+        .addTextDisplayComponents(
+          new TextDisplayBuilder().setContent(`Here are the ${interaction.guild.members.cache.size} members from **${interaction.guild.name}**.`)
+        )
+        .addFileComponents(
+          new FileBuilder().setURL(`attachment://${filename}`)
+        );
+
+      await interaction.user.send({
+        components: [dmContainer],
+        flags: MessageFlags.IsComponentsV2,
+        files: [attachment]
+      });
+
+      const successContainer = new ContainerBuilder()
+        .addTextDisplayComponents(
+          new TextDisplayBuilder().setContent(`**File Sent**`)
+        )
+        .addSeparatorComponents(
+          new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small).setDivider(true)
+        )
+        .addTextDisplayComponents(
+          new TextDisplayBuilder().setContent('The members list has been sent to your DMs.')
+        );
+
+      await interaction.editReply({
+        components: [successContainer],
+        flags: MessageFlags.IsComponentsV2
+      });
+
+      await DumpExporter.cleanupFile(filePath);
+    } catch (error) {
+      console.error(error);
+      const container = new ContainerBuilder()
+        .addTextDisplayComponents(
+          new TextDisplayBuilder().setContent(`**Error**`)
+        )
+        .addSeparatorComponents(
+          new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small).setDivider(true)
+        )
+        .addTextDisplayComponents(
+          new TextDisplayBuilder().setContent(error.code === 50007 ? 'Failed to DM you. Please enable DMs from server members.' : 'Failed to export members.')
+        );
+      await interaction.editReply({
+        components: [container],
+        flags: MessageFlags.IsComponentsV2
+      });
+    }
+  },
+};
